@@ -2,7 +2,7 @@ name: Build iOS IPA (VietNav)
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -17,70 +17,82 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
 
-      - name: Install Xcode (if needed)
-        run: |
-          if [ ! -d /Applications/Xcode.app ]; then
-            xcode-select -p
-          fi
-
-      - name: Show environment
+      - name: Show environment and install XcodeGen
         run: |
           xcodebuild -version
           swift --version
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
 
-      - name: Download offline map data (speedmap)
+      - name: Download offline map data
         run: |
-          mkdir -p VietNav/VietNav/Resources/speedmap
+          set -euo pipefail
+          mkdir -p VietNav/Resources/speedmap
           BASE="https://raw.githubusercontent.com/911273/VietHUD/main/speedmap"
           for f in cameras.bin signs.bin tiles.bin index.bin metadata.bin names.bin seg_names.bin; do
             echo "Downloading $f ..."
-            curl -L -o "VietNav/VietNav/Resources/speedmap/$f" "$BASE/$f"
+            curl --fail --location --retry 3 --retry-all-errors --output "VietNav/Resources/speedmap/$f" "$BASE/$f"
+            test -s "VietNav/Resources/speedmap/$f"
           done
-          ls -lh VietNav/VietNav/Resources/speedmap
+          ls -lh VietNav/Resources/speedmap
 
-      - name: Decode signing certificate
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Import signing certificate
         env:
           CERTIFICATE_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
         run: |
-          echo "$CERTIFICATE_BASE64" | base64 --decode > /tmp/certificate.p12
+          set -euo pipefail
+          test -n "$CERTIFICATE_BASE64" || { echo "Missing repository secret CERTIFICATE_BASE64"; exit 1; }
+          test -n "$CERTIFICATE_PASSWORD" || { echo "Missing repository secret CERTIFICATE_PASSWORD"; exit 1; }
+          printf '%s' "$CERTIFICATE_BASE64" | base64 --decode > /tmp/vietnav-certificate.p12
           security create-keychain -p "" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "" build.keychain
-          security import /tmp/certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security import /tmp/vietnav-certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
 
       - name: Install provisioning profile
         env:
           PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
         run: |
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
-
-      - name: Build Xcode project (create if missing)
-        run: |
-          # Nếu bạn chưa có .xcodeproj, tạo bằng xcodebuild template:
-          if [ ! -f VietNav.xcodeproj/project.pbxproj ]; then
-            echo "⚠️ Không tìm thấy .xcodeproj. Tạo mới bằng Xcode CLI..."
-            xcodebuild -create-xcode-project -project VietNav -target VietNav
-          fi
-          echo "✅ Project ready"
+          set -euo pipefail
+          test -n "$PROVISIONING_PROFILE_BASE64" || { echo "Missing repository secret PROVISIONING_PROFILE_BASE64"; exit 1; }
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          printf '%s' "$PROVISIONING_PROFILE_BASE64" | base64 --decode > /tmp/vietnav-profile.mobileprovision
+          security cms -D -i /tmp/vietnav-profile.mobileprovision > /tmp/vietnav-profile.plist
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' /tmp/vietnav-profile.plist)
+          cp /tmp/vietnav-profile.mobileprovision "$PROFILE_DIR/$PROFILE_UUID.mobileprovision"
 
       - name: Build archive
+        env:
+          PROFILE_NAME: ${{ secrets.PROFILE_NAME }}
         run: |
+          set -euo pipefail
+          test -n "$PROFILE_NAME" || { echo "Missing repository secret PROFILE_NAME (the profile's display name)"; exit 1; }
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' /tmp/vietnav-profile.plist)
           xcodebuild \
             -project VietNav.xcodeproj \
             -scheme VietNav \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath build/VietNav.xcarchive \
-            archive \
             CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            archive
 
       - name: Export IPA
+        env:
+          PROFILE_NAME: ${{ secrets.PROFILE_NAME }}
         run: |
+          set -euo pipefail
           cat > exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -90,13 +102,19 @@ jobs:
             <string>ad-hoc</string>
             <key>signingStyle</key>
             <string>manual</string>
+            <key>teamID</key>
+            <string>$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' /tmp/vietnav-profile.plist)</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.vietnav.app</key>
+              <string>${PROFILE_NAME}</string>
+            </dict>
             <key>stripSwiftSymbols</key>
             <true/>
-            <key>compileBitcode</key>
-            <false/>
           </dict>
           </plist>
           EOF
+          plutil -lint exportOptions.plist
           xcodebuild -exportArchive \
             -archivePath build/VietNav.xcarchive \
             -exportPath build/ipa \
@@ -107,4 +125,5 @@ jobs:
         with:
           name: VietNav-ipa
           path: build/ipa/*.ipa
+          if-no-files-found: error
           retention-days: 30

@@ -1,0 +1,43 @@
+name: VietNav
+options:
+  bundleIdPrefix: com.vietnav
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+targets:
+  VietNav:
+    type: application
+    platform: iOS
+    sources:
+      - path: VietNav
+        excludes:
+          - Info.plist
+          - Resources/**
+    resources:
+      - path: VietNav/Resources/speedmap
+        excludes:
+          - .gitkeep
+    info:
+      path: VietNav/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vietnav.app
+        PRODUCT_NAME: VietNav
+        SWIFT_VERSION: "5.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+
+schemes:
+  VietNav:
+    build:
+      targets:
+        VietNav: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+    profile:
+      config: Release

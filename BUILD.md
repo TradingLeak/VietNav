@@ -1,55 +1,42 @@
 # VietNav — Build & Archive Guide
 
-## 1. Mở dự án
-- Mở Xcode, chọn `Open`, vào thư mục `VietNav`, chọn `VietNav.xcodeproj` (hoặc tạo workspace nếu bạn muốn).
-- Nếu chưa có `.xcodeproj`, tạo mới: Xcode → File → New → Project → App → SwiftUI → Interface: SwiftUI → Life Cycle: SwiftUI App → Language: Swift. Sao chép các file Swift trong thư mục `VietNav/` vào dự án.
+## Mở dự án trong Xcode
 
-## 2. Thêm dữ liệu bản đồ ngoại tuyến
-Tải 7 file từ [VietHUD/speedmap](https://github.com/911273/VietHUD/tree/main/speedmap):
+Xcode project được sinh từ `project.yml` bằng XcodeGen (không dùng `xcodebuild -create-xcode-project`, lệnh đó không tồn tại trong Xcode):
+
+```bash
+brew install xcodegen
+xcodegen generate --spec project.yml
+open VietNav.xcodeproj
+```
+
+Yêu cầu: macOS với Xcode 16 trở lên, iOS 17 trở lên. Các file Swift nằm trong `VietNav/`; bundle ID mặc định là `com.vietnav.app`.
+
+## Dữ liệu bản đồ ngoại tuyến
+
+Các workflow tải 7 file từ [VietHUD/speedmap](https://github.com/911273/VietHUD/tree/main/speedmap) vào `VietNav/Resources/speedmap/` trước khi tạo project:
+
 - `cameras.bin`, `signs.bin`, `tiles.bin`, `index.bin`, `metadata.bin`, `names.bin`, `seg_names.bin`
 
-Drag & drop toàn bộ vào Xcode vào folder `Resources/speedmap`:
-- Tích **Copy items if needed**
-- Tích **Add to target: VietNav**
+Khi thêm file thủ công trong Xcode, hãy đảm bảo chúng được thêm vào target **VietNav** như resources. Không commit các file bản đồ lớn vào Git.
 
-> Lưu ý: `tiles.bin` rất lớn (~235 MB). Nếu dung lượng quá lớn, bạn có thể tách thành các vùng miền và tải khi cần.
+## Signing & capability
 
-## 3. Cấu hình ký&capability
-- Signing & Capabilities →チーム chọn Apple Developer team.
-- Thêm Capability: **Background Modes** → tick `Location updates` và `Audio`.
-- Info.plist đã có các chuỗiuso Standort (`NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription`).
+- Để chạy trên thiết bị hoặc xuất IPA có ký, chọn Apple Developer Team trong **Signing & Capabilities**.
+- App cần quyền vị trí nền; `Info.plist` đã khai báo mô tả quyền và background modes (`location`, `audio`).
+- Bundle ID trong provisioning profile phải là `com.vietnav.app`.
 
-## 4. Chạy thử
-- Chọn thiết bị thật (iPhone) vì bản đồ ngoài tuyến cần GPS.
-- Nhấn **Run** (⌘R).
+## Chạy thử
 
-## 5. Xuất IPA (sideload / TestFlight)
-1. Product → Archive
-2. Chọn archive vừa tạo → Distribute App
-3. Chọn `Ad Hoc` (sideload) hoặc `App Store` (TestFlight/App Store)
-4. Làm theo hướng dẫn ký certificate, export IPA
+Chọn iPhone (iOS 17+) trong Xcode và nhấn **Run** (⌘R). GPS phù hợp hơn khi chạy trên thiết bị thật.
 
-## 6. Cấu hình AI (ckey.vn)
-Mở app → Cài đặt → Triển khai AI:
-- Base URL: `https://ckey.vn`
-- Model: tên model custom của bạn
-- API Key: lấy từ ckey.vn (lưu trong Keychain, không hiển thị rõ)
+## Xuất IPA qua GitHub Actions
 
-## 7. Cấu trúc thư mục
-```
-VietNav/
-├─ VietNavApp.swift
-├─ Info.plist
-├─ Package.swift
-├─ Views/ (RootView, MapHomeView, NavigationDashboardView, SettingsView, ...)
-├─ ViewModels/ (AppState.swift)
-├─ Services/ (LocationService, AIRoutingService, SpeedmapParser, OSMMapService, WarningService)
-├─ Models/ (mã nguồn gộp trong AppState.swift)
-├─ Components/ (NeumorphicButton, PrimaryButton, ...)
-└─ Resources/speedmap/ (*.bin)
-```
+- **Unsigned IPA:** chạy workflow **Build Unsigned iOS IPA (No Apple Account)**. IPA này chỉ đóng gói app chưa ký, cần ký lại bằng AltStore/Sideloadly hoặc công cụ tương tự trước khi cài.
+- **IPA đã ký Ad Hoc:** chạy workflow **Build iOS IPA (VietNav)**. Cần thiết lập repository secrets như trong `GITHUB_IPA_GUIDE.md`.
 
-## 8. Yêu cầu hệ thống
-- Xcode 16+ (Swift 6, SwiftUI)
-- iOS 17+
-- Apple Developer account (để ký & xuất IPA)
+Cả hai workflow đều tạo Xcode project qua XcodeGen và kiểm tra lỗi tải dữ liệu thay vì tiếp tục với file tải hỏng.
+
+## Cấu hình AI (ckey.vn)
+
+Mở app → **Cài đặt** → **Triển khai AI** và nhập base URL, model, API key. API key được lưu trong Keychain.

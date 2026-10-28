@@ -56,8 +56,9 @@ Vào Repository → **Settings → Secrets and variables → Actions → New rep
 | `PROFILE_NAME` | tên provisioning profile (ví dụ `VietNav AdHoc`) |
 
 ## 4. Kích hoạt build
-- Mỗi lần `git push` lên `main`, workflow `.github/workflows/build-ios.yml` tự chạy.
-- Hoặc vào tab **Actions → Build iOS IPA (VietNav) → Run workflow** để build thủ công.
+- Push lên `main` để workflow `.github/workflows/build-ios.yml` tự chạy.
+- Hoặc vào tab **Actions → Build iOS IPA (VietNav) → Run workflow** để build thủ công trên branch đang chọn.
+- Workflow cài XcodeGen và sinh `VietNav.xcodeproj` từ `project.yml`; không cần tạo project Xcode thủ công.
 
 ## 5. Tải IPA
 - Sau khi build xong, vào **Actions → run → Artifacts → VietNav-ipa** → tải file `.ipa` về.
@@ -77,16 +78,21 @@ git lfs track "*.bin"
 git add .gitattributes
 ```
 
-## 8. Kiểm tra build locally (nếu sau này có Mac)
+## 8. Kiểm tra build locally (nếu có Mac)
 ```bash
-xcodebuild -project VietNav.xcodeproj -scheme VietNav -configuration Release -destination 'generic/platform=iOS' archive
+brew install xcodegen
+xcodegen generate --spec project.yml
+xcodebuild -project VietNav.xcodeproj -scheme VietNav -configuration Release -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO
 ```
+
+Để archive có ký, cấu hình Apple Developer Team và provisioning profile hợp lệ trước khi chạy `xcodebuild archive`.
 
 ## Troubleshooting
 - **Lỗi "No signing certificate"**: kiểm tra secret `CERTIFICATE_BASE64` và password.
 - **Lỗi "Provisioning profile doesn't match"**: đảm bảo Bundle ID `com.vietnav.app` trùng với App ID trong profile.
-- **Lỗi "Missing .xcodeproj"**: workflow sẽ tự tạo bằng `xcodebuild -create-xcode-project`, nhưng tốt nhất nên tạo project bằng Xcode trước (nếu có Mac) rồi commit `.xcodeproj`.
-- **Build timeout**: tăng timeout trong workflow (mặc định 6h) hoặc tách bước tải data.
+- **Lỗi "Missing .xcodeproj"**: workflow phải chạy bước cài XcodeGen và `xcodegen generate --spec project.yml`. `xcodebuild -create-xcode-project` không phải lệnh hợp lệ.
+- **Lỗi tải speedmap**: kiểm tra URL nguồn và log của bước `Download offline map data`; workflow hiện dừng nếu HTTP lỗi hoặc file rỗng.
+- **Build timeout**: bộ dữ liệu bản đồ lớn, đặc biệt `tiles.bin`; kiểm tra thời gian và log tải dữ liệu trong run Actions.
 
 ---
 **Tóm tắt:** Bạn chỉ cần push code lên GitHub → Actions tự build trên macOS runner → tải `.ipa` từ Artifacts. Không cần máy Mac cá nhân.

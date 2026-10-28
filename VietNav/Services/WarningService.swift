@@ -5,6 +5,7 @@
 //
 
 import Foundation
+import Combine
 import CoreLocation
 
 final class WarningService: ObservableObject {

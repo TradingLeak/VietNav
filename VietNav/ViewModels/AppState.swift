@@ -5,6 +5,7 @@
 
 import SwiftUI
 import Combine
+import CoreLocation
 
 final class AppState: ObservableObject {
     static let shared = AppState()
@@ -39,7 +40,7 @@ final class AppState: ObservableObject {
     }
 }
 
-struct Route: Identifiable, Codable {
+struct Route: Identifiable {
     let id: UUID
     var name: String
     var distance: CLLocationDistance // meters
@@ -49,7 +50,7 @@ struct Route: Identifiable, Codable {
     var aiOptimized: Bool = false
 }
 
-struct Leg: Identifiable, Codable {
+struct Leg: Identifiable {
     let id: UUID
     var distance: CLLocationDistance
     var expectedTravelTime: TimeInterval
@@ -58,7 +59,7 @@ struct Leg: Identifiable, Codable {
     var endCoordinate: CLLocationCoordinate2D
 }
 
-struct Step: Identifiable, Codable {
+struct Step: Identifiable {
     let id: UUID
     var instruction: String
     var distance: CLLocationDistance

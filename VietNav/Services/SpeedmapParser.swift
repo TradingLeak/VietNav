@@ -7,10 +7,11 @@
 //
 
 import Foundation
+import Combine
 import CoreLocation
 
 // MARK: - Speedmap data models
-struct SpeedCamera: Identifiable, Codable {
+struct SpeedCamera: Identifiable {
     let id: UUID
     var coordinate: CLLocationCoordinate2D
     var type: CameraType
@@ -39,7 +40,7 @@ enum CameraType: String, Codable, CaseIterable {
     }
 }
 
-struct RoadSign: Identifiable, Codable {
+struct RoadSign: Identifiable {
     let id: UUID
     var coordinate: CLLocationCoordinate2D
     var type: SignType
@@ -251,7 +252,7 @@ final class SpeedmapParser {
     }
 }
 
-private extension CLLocationCoordinate2D {
+extension CLLocationCoordinate2D {
     func distance(to other: CLLocationCoordinate2D) -> CLLocationDistance {
         CLLocation(latitude: latitude, longitude: longitude)
             .distance(from: CLLocation(latitude: other.latitude, longitude: other.longitude))

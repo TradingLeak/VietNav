@@ -6,6 +6,8 @@
 
 import Foundation
 import Combine
+import CoreLocation
+import Security
 
 enum AIProviderError: Error, LocalizedError {
     case invalidURL, noData, decodingFailed, serverError(Int), cancelled, missingAPIKey
