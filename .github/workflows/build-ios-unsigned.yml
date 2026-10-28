@@ -42,6 +42,7 @@ jobs:
       - name: Build unsigned .app
         run: |
           set -euo pipefail
+          set +e
           xcodebuild \
             -project VietNav.xcodeproj \
             -scheme VietNav \
@@ -51,7 +52,16 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee build-xcodebuild.log
+          xcode_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$xcode_status" -ne 0 ]; then
+            while IFS= read -r line; do
+              safe_line=$(printf '%s' "$line" | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+              echo "::error title=xcodebuild::$safe_line"
+            done < <(grep -E 'error:|fatal error:|BUILD FAILED' build-xcodebuild.log | tail -n 50)
+            exit "$xcode_status"
+          fi
 
       - name: Package unsigned .ipa
         run: |
@@ -68,4 +78,5 @@ jobs:
         with:
           name: VietNav-unsigned-ipa
           path: build/ipa/VietNav-unsigned.ipa
+          if-no-files-found: error
           retention-days: 30
