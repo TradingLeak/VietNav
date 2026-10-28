@@ -2,7 +2,7 @@ name: Build Unsigned iOS IPA (No Apple Account)
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'arena/**']
   workflow_dispatch:
 
 jobs:
