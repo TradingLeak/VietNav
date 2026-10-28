@@ -1,0 +1,62 @@
+name: Build Unsigned iOS IPA (No Apple Account)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Download offline map data (speedmap)
+        run: |
+          mkdir -p VietNav/VietNav/Resources/speedmap
+          BASE="https://raw.githubusercontent.com/911273/VietHUD/main/speedmap"
+          for f in cameras.bin signs.bin tiles.bin index.bin metadata.bin names.bin seg_names.bin; do
+            echo "Downloading $f ..."
+            curl -L -o "VietNav/VietNav/Resources/speedmap/$f" "$BASE/$f"
+          done
+          ls -lh VietNav/VietNav/Resources/speedmap
+
+      - name: Build unsigned .app
+        run: |
+          if [ ! -f VietNav.xcodeproj/project.pbxproj ]; then
+            echo "⚠️ Không tìm thấy .xcodeproj. Tạo mới..."
+            xcodebuild -create-xcode-project -project VietNav -target VietNav
+          fi
+          xcodebuild \
+            -project VietNav.xcodeproj \
+            -scheme VietNav \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned .ipa
+        run: |
+          APP_PATH=$(find build/DerivedData -name "VietNav.app" -type d | head -1)
+          echo "Found app: $APP_PATH"
+          mkdir -p build/ipa/Payload
+          cp -R "$APP_PATH" build/ipa/Payload/
+          cd build/ipa
+          zip -r VietNav-unsigned.ipa Payload
+          ls -lh
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VietNav-unsigned-ipa
+          path: build/ipa/VietNav-unsigned.ipa
+          retention-days: 30
